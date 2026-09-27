@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>X-01 Aeromarine Nexus — MIT Graduate Level Digital Twin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+<style>
+:root { --eng-blue:#0066CC; --eng-cyan:#00CCFF; --eng-dark:#111827; --eng-card:#1F2937; --eng-green:#10B981; --eng-red:#EF4444; --eng-amber:#F59E0B; }
+body { background:linear-gradient(135deg,#0F172A,#1E293B); color:#E5E7EB; font-family:'Inter',system-ui,sans-serif; min-height:100vh; }
+.panel { background:rgba(31,41,55,0.85); backdrop-filter:blur(12px); border:1px solid rgba(75,85,99,0.5); border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.3); }
+input,button,select { background:#111827; border:1px solid #4B5563; color:white; border-radius:6px; padding:6px 10px; }
+input:focus { outline:none; border-color:var(--eng-cyan); box-shadow:0 0 0 2px rgba(0,204,255,0.25); }
+.slider { -webkit-appearance:none; height:6px; border-radius:3px; background:#374151; }
+.slider::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background:var(--eng-cyan); cursor:pointer; box-shadow:0 0 8px rgba(0,204,255,0.6); }
+#viewer { width:100%; height:420px; border-radius:12px; overflow:hidden; background:linear-gradient(180deg,#0C4A6E,#164E63); }
+.stat-value { font-variant-numeric:tabular-nums; font-weight:700; font-size:1.15rem; }
+.pass { color:var(--eng-green); }
+.fail { color:var(--eng-red); }
+.tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:0.75rem; font-weight:600; }
+.tag.blue { background:rgba(0,102,204,0.3); color:#93C5FD; }
+.tag.teal { background:rgba(13,148,136,0.3); color:#5EEAD4; }
+.tag.amber { background:rgba(245,158,11,0.3); color:#FCD34D; }
+h1,h2,h3 { font-weight:700; letter-spacing:-0.02em; }
+label { font-size:0.8rem; color:#9CA3AF; }
+.grid-in { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; }
+.sep { border-bottom:1px solid #374151; margin:10px 0; }
+</style>
+</head>
+<body class="p-4 md:p-6">
+<header class="max-w-7xl mx-auto mb-5">
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <div>
+      <h1 class="text-2xl md:text-3xl font-bold text-white">X‑01 Aeromarine Nexus</h1>
+      <p class="text-sm text-slate-400">Multimedia Vehicle Digital Twin — Graduate Level Engineering Framework</p>
+    </div>
+    <div class="flex gap-2">
+      <span class="tag blue">V9</span>
+      <span class="tag teal">λ‑Continuous</span>
+      <span class="tag amber">Reduced‑Order Model</span>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+<!-- 🔹 3D Viewer -->
+<section class="lg:col-span-3 panel p-4">
+  <div class="flex justify-between items-center mb-3">
+    <h2 class="text-lg font-semibold">3D CAD Model — Rotate • Zoom • Pan</h2>
+    <div class="text-sm">
+      <span class="text-slate-400">Transition State:</span>
+      <span id="lam_display" class="stat-value text-cyan-400 ml-1">λ = 0.00</span>
+      <span id="regime_display" class="ml-2 text-xs bg-slate-700 px-2 py-0.5 rounded">Atmospheric</span>
+    </div>
+  </div>
+  <div id="viewer"></div>
+  <div class="mt-3 flex items-center gap-3">
+    <label class="mb-0 whitespace-nowrap">λ = 0 … 1</label>
+    <input type="range" id="lam_slider" class="slider flex-1" min="0" max="1" step="0.01" value="0">
+    <button id="resetView" class="ml-2 px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm">Reset View</button>
+  </div>
+</section>
+
+<!-- 🔹 Inputs -->
+<section class="panel p-4">
+  <h2 class="text-lg font-semibold mb-3">📐 Design Parameters — All Measurable</h2>
+
+  <h3 class="text-sm font-semibold text-cyan-400 mb-2">Body & Mass</h3>
+  <div class="grid-in mb-3">
+    <div><label>Length L_body (m)</label><input type="number" id="i_Lbody" value="2.40" step="0.05" class="w-full mt-1"></div>
+    <div><label>D_max (m)</label><input type="number" id="i_Dmax" value="0.32" step="0.01" class="w-full mt-1"></div>
+    <div><label>Dry Mass (kg)</label><input type="number" id="i_Mass" value="38.5" step="0.5" class="w-full mt-1"></div>
+    <div><label>CG x/L</label><input type="number" id="i_xcg" value="0.48" step="0.01" class="w-full mt-1"></div>
+  </div>
+
+  <h3 class="text-sm font-semibold text-sky-400 mb-2">Aero Wing</h3>
+  <div class="grid-in mb-3">
+    <div><label>S_a₀ (m²)</label><input type="number" id="i_Sa0" value="1.85" step="0.05" class="w-full mt-1"></div>
+    <div><label>AR_a</label><input type="number" id="i_ARa" value="7.2" step="0.1" class="w-full mt-1"></div>
+    <div><label>α (deg)</label><input type="number" id="i_alpha" value="4.5" step="0.5" class="w-full mt-1"></div>
+    <div><label>dS_a/dλ</label><input type="number" id="i_dSa" value="-1.0" step="0.05" class="w-full mt-1"></div>
+  </div>
+
+  <h3 class="text-sm font-semibold text-teal-400 mb-2">Hydro Foil</h3>
+  <div class="grid-in mb-3">
+    <div><label>S_h₁ (m²)</label><input type="number" id="i_Sh1" value="0.72" step="0.02" class="w-full mt-1"></div>
+    <div><label>AR_h</label><input type="number" id="i_ARh" value="4.1" step="0.1" class="w-full mt-1"></div>
+    <div><label>h_sub (m)</label><input type="number" id="i_hsub" value="0.85" step="0.05" class="w-full mt-1"></div>
+    <div><label>dS_h/dλ</label><input type="number" id="i_dSh" value="0.72" step="0.05" class="w-full mt-1"></div>
+  </div>
+
+  <h3 class="text-sm font-semibold text-amber-400 mb-2">Operation & Fluids</h3>
+  <div class="grid-in mb-3">
+    <div><label>Velocity V (m/s)</label><input type="number" id="i_V" value="14.0" step="0.5" class="w-full mt-1"></div>
+    <div><label>ρ_air</label><input type="number" id="i_rhoA" value="1.225" step="0.005" class="w-full mt-1"></div>
+    <div><label>ρ_water</label><input type="number" id="i_rhoW" value="1025" step="1" class="w-full mt-1"></div>
+    <div><label>Uncert f_σ</label><input type="number" id="i_fsig" value="0.15" step="0.01" class="w-full mt-1"></div>
+  </div>
+
+  <h3 class="text-sm font-semibold text-rose-400 mb-2">Stability & Limits</h3>
+  <div class="grid-in mb-3">
+    <div><label>SM_min</label><input type="number" id="i_SMmin" value="0.12" step="0.01" class="w-full mt-1"></div>
+    <div><label>n_max</label><input type="number" id="i_nmax" value="2.5" step="0.1" class="w-full mt-1"></div>
+    <div><label>η_prop</label><input type="number" id="i_eta" value="0.78" step="0.01" class="w-full mt-1"></div>
+    <div><label>Reynolds Scale</label><input type="number" id="i_ReSc" value="1.0" step="0.05" class="w-full mt-1"></div>
+  </div>
+
+  <div class="sep"></div>
+  <button id="applyBtn" class="w-full py-2 bg-cyan-600 hover:bg-cyan-500 font-semibold rounded mb-2">Apply & Update Model</button>
+  <button id="optimBtn" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 font-semibold rounded mb-2">🔍 Run λ Optimization</button>
+  <button id="exportBtn" class="w-full py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm">📤 Export Data as CSV</button>
+</section>
+
+<!-- 🔹 Results -->
+<section class="panel p-4">
+  <h2 class="text-lg font-semibold mb-3">📊 Real-Time Engineering Outputs</h2>
+
+  <div class="grid grid-cols-2 gap-3 mb-4">
+    <div class="bg-slate-800/60 rounded p-2">
+      <div class="text-xs text-slate-400">Dynamic Pressure Air</div>
+      <div id="o_qA" class="stat-value text-sky-400">—</div>
+    </div>
+    <div class="bg-slate-800/60 rounded p-2">
+      <div class="text-xs text-slate-400">Dynamic Pressure Water</div>
+      <div id="o_qH" class="stat-value text-teal-400">—</div>
+    </div>
+    <div class="bg-slate-800/60 rounded p-2">
+      <div class="text-xs text-slate-400">Total Lift (N)</div>
+      <div id="o_L" class="stat-value text-white">—</div>
+    </div>
+    <div class="bg-slate-800/60 rounded p-2">
+      <div class="text-xs text-slate-400">Total Drag (N)</div>
+      <div id="o_D" class="stat-value text-white">—</div>
+    </div>
+    <div class="bg-slate-800/60 rounded p-2">
+      <div class="text-xs text-slate-400">L/D Ratio</div>
+      <div id="o_LD" class="stat-value text-emerald-400">—</div>
+    </div>
+    <div class="bg-slate-800/60 rounded p-2">
+      <div class="text-xs text-slate-400">Propulsion Power (kW)</div>
+      <div id="o_P" class="stat-value text-amber-400">—</div>
+    </div>
+    <div class="bg-slate-800/60 rounded p-2">
+      <div class="text-xs text-slate-400">Stability Margin</div>
+      <div id="o_SM" class="stat-value">—</div>
+    </div>
+    <div class="bg-slate-800/60 rounded p-2">
+      <div class="text-xs text-slate-400">Cumul. Energy (kJ)</div>
+      <div id="o_E" class="stat-value text-purple-400">—</div>
+    </div>
+  </div>
+
+  <h3 class="text-sm font-semibold mb-2">Force Components Across Transition</h3>
+  <div class="bg-slate-800/40 rounded p-2 mb-3"><canvas id="plotForces" height="180"></canvas></div>
+
+  <h3 class="text-sm font-semibold mb-2">Power, Energy & Uncertainty</h3>
+  <div class="bg-slate-800/40 rounded p-2 mb-3"><canvas id="plotEnergy" height="180"></canvas></div>
+
+  <h3 class="text-sm font-semibold mb-2">Stability & Optimization</h3>
+  <div class="bg-slate-800/40 rounded p-2"><canvas id="plotOpt" height="180"></canvas></div>
+</section>
+
+<!-- 🔹 Status & Notes -->
+<section class="lg:col-span-3 panel p-4">
+  <div class="grid md:grid-cols-3 gap-4 text-sm">
+    <div>
+      <h3 class="font-semibold text-slate-300 mb-1">Model Status</h3>
+      <p class="text-slate-400">V9 Reduced‑Order Digital Twin — <strong>Not CFD‑validated</strong>. Use for design space exploration only. Next steps: mesh‑converged CFD → instrumented scale model → calibration.</p>
+    </div>
+    <div>
+      <h3 class="font-semibold text-slate-300 mb-1">Governing Equations</h3>
+      <code class="text-xs text-slate-400 block bg-slate-900/50 p-2 rounded">
+q = ½ρV² &nbsp;|&nbsp; L = q·S·C_L<br>
+D_total = Dₐ + Dₕ + D_int + D_tr<br>
+P = D·V/η &nbsp;|&nbsp; SM = (x_np − x_cg)/L<br>
+ŷ ± 1.96·f_σ·ŷ = 95% interval
+      </code>
+    </div>
+    <div>
+      <h3 class="font-semibold text-slate-300 mb-1">Validation Level</h3>
+      <ul class="text-slate-400 space-y-1">
+        <li>✅ L1 — Analytical / Unit check</li>
+        <li>✅ L2 — Reproducible Digital Twin</li>
+        <li>⏳ L3 — CFD (pending import)</li>
+        <li>⏳ L4 — Experiment (pending test)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+// ======================================================
+// ENGINEERING MODEL — X-01 V9 Reduced-Order Framework
+// ======================================================
+const Model = {
+  getParams() {
+    return {
+      L_body: +document.getElementById('i_Lbody').value,
+      D_max: +document.getElementById('i_Dmax').value,
+      M: +document.getElementById('i_Mass').value,
+      xcg: +document.getElementById('i_xcg').value,
+      Sa0: +document.getElementById('i_Sa0').value,
+      ARa: +document.getElementById('i_ARa').value,
+      alpha: +document.getElementById('i_alpha').value * Math.PI/180,
+      dSa_dL: +document.getElementById('i_dSa').value,
+      Sh1: +document.getElementById('i_Sh1').value,
+      ARh: +document.getElementById('i_ARh').value,
+      hsub: +document.getElementById('i_hsub').value,
+      dSh_dL: +document.getElementById('i_dSh').value,
+      V: +document.getElementById('i_V').value,
+      rhoA: +document.getElementById('i_rhoA').value,
+      rhoW: +document.getElementById('i_rhoW').value,
+      f_sigma: +document.getElementById('i_fsig').value,
+      SMmin: +document.getElementById('i_SMmin').value,
+      nmax: +document.getElementById('i_nmax').value,
+      eta: +document.getElementById('i_eta').value,
+      ReScale: +document.getElementById('i_ReSc').value,
+      // Coefficients
+      CLa: 5.7, CLh: 4.9, CD0a: 0.018, CD0h: 0.024
+    };
+  },
+
+  geometry(lam, p) {
+    const Sa = p.Sa0 * Math.max(0.05, 1 + p.dSa_dL * lam);
+    const Sh = p.Sh1 * Math.pow(lam, 1.2);
+    const ba = Math.sqrt(Sa * p.ARa);
+    const bh = Math.sqrt(Sh * p.ARh);
+    const h = p.hsub * lam;
+    const dihedral = 3 + 12 * lam; // degrees
+    const tau = (-2 + 6 * lam) * Math.PI/180; // foil incidence rad
+    const xnp = (0.25*Sa + 0.55*Sh) / (Sa+Sh); // neutral point x/L
+    return { Sa, Sh, ba, bh, h, dihedral, tau, xnp };
+  },
+
+  compute(lam, p) {
+    const g = this.geometry(lam, p);
+    const qA = 0.5 * p.rhoA * p.V * p.V;
+    const qH = 0.5 * p.rhoW * p.V * p.V;
+
+    // Aero forces
+    const CLa_eff = p.CLa * (1 - 0.15*lam*lam);
+    const CLa_ind = 1 / (Math.PI * p.ARa * 0.75);
+    const CLa_d = CLa_eff * p.alpha;
+    const CDa = p.CD0a + CLa_d*CLa_d * CLa_ind;
+    const La = qA * g.Sa * CLa_d;
+    const Da = qA * g.Sa * CDa;
+
+    // Hydro forces
+    const CLh_eff = p.CLh * Math.pow(lam, 0.8);
+    const CLh_d = CLh_eff * g.tau;
+    const CDh_ind = 1 / (Math.PI * p.ARh * 0.70);
+    const CDh = p.CD0h + CLh_d*CLh_d * CDh_ind + 0.02*lam*lam;
+    const Lh = qH * g.Sh * CLh_d;
+    const Dh = qH * g.Sh * CDh;
+
+    // Transition/interference drag
+    const Dint = 0.5 * (p.rhoW/p.rhoA) * qA * g.Sa * Math.pow(lam, 2.5);
+    const Dtr = 0.25 * (qA+qH)/2 * (p.Sa0+p.Sh1) * lam*(1-lam);
+
+    const Dtot = Da + Dh + Dint + Dtr;
+    const Ltot = La + Lh;
+    const LD = Dtot>0 ? Ltot/Dtot : 0;
+    const P = (Dtot * p.V) / p.eta;
+    const E = P * 10 * lam; // ~10s transition ref timescale
+
+    // Stability margin
+    const SM = g.Sa+g.Sh > 0.01 ? (g.xnp - p.xcg) : 0;
+    const stable = SM >= p.SMmin;
+
+    // Uncertainty
+    const sE = p.f_sigma * Math.abs(E);
+
+    return {
+      lam, qA, qH, La, Lh, Da, Dh, Dint, Dtr, Dtot, Ltot, LD, P, E, sE, SM, stable, g
+    };
+  },
+
+  sweep(p, n=41) {
+    const out=[];
+    for(let i=0;i<n;i++) out.push(this.compute(i/(n-1), p));
+    return out;
+  },
+
+  findOptimum(p) {
+    const sw = this.sweep(p, 81);
+    const wE=1, wSM=2, wL=1.5;
+    let best=null, bestJ=1e9;
+    sw.forEach(r=>{
+      const J = wE*(r.E/1000) + wSM*(p.SMmin/Math.max(0.01,r.SM)) + wL*(1/Math.max(0.5, r.Ltot/(p.M*9.81)));
+      if(r.stable && J<bestJ) { bestJ=J; best=r; }
+    });
+    return best;
+  }
+};
+
+// ======================================================
+// 3D VIEWER — Three.js Parametric Model
+// ======================================================
+const Viewer = {
+  scene:null, camera:null, renderer:null, bodies:{},
+  isDragging:false, lastX:0, lastY:0,
+  rotX:0.3, rotY:0.6, dist:6,
+
+  init() {
+    const c = document.getElementById('viewer');
+    const W=c.clientWidth, H=c.clientHeight;
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(45, W/H, 0.1, 100);
+    this.renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+    this.renderer.setSize(W,H);
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    c.appendChild(this.renderer.domElement);
+
+    // Lights
+    const amb = new THREE.AmbientLight(0xffffff, 0.5);
+    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+    dir.position.set(3,5,2);
+    this.scene.add(amb, dir);
+
+    // Build parts
+    this.buildFuselage();
+    this.buildWing();
+    this.buildHydrofoil();
+    this.buildStruts();
+
+    // Mouse controls
+    c.addEventListener('mousedown',e=>{this.isDragging=true;this.lastX=e.clientX;this.lastY=e.clientY;});
+    window.addEventListener('mouseup',()=>this.isDragging=false);
+    window.addEventListener('mousemove',e=>{
+      if(!this.isDragging) return;
+      const dx=e.clientX-this.lastX, dy=e.clientY-this.lastY;
+      this.rotY+=dx*0.005; this.rotX+=dy*0.005;
+      this.rotX=Math.max(-Math.PI/2,Math.min(Math.PI/2,this.rotX));
+      this.lastX=e.clientX; this.lastY=e.clientY;
+    });
+    c.addEventListener('wheel',e=>{e.preventDefault();this.dist*=1+Math.sign(e.deltaY)*0.1; this.dist=Math.max(2,Math.min(15,this.dist));});
+    document.getElementById('resetView').onclick=()=>{this.rotX=0.3;this.rotY=0.6;this.dist=6;};
+
+    window.addEventListener('resize',()=>{
+      const c2=document.getElementById('viewer');
+      this.camera.aspect=c2.clientWidth/c2.clientHeight;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(c2.clientWidth, c2.clientHeight);
+    });
+
+    this.animate();
+  },
+
+  buildFuselage() {
+    const geom = new THREE.CapsuleGeometry(0.2, 1.8, 16, 32);
+    const mat = new THREE.MeshStandardMaterial({color:0xE8E8E8, metalness:0.2, roughness:0.3});
+    this.bodies.fuselage = new THREE.Mesh(geom, mat);
+    this.bodies.fuselage.position.y=0;
+    this.scene.add(this.bodies.fuselage);
+  },
+
+  buildWing() {
+    const g = new THREE.BoxGeometry(2, 0.06, 0.25);
+    const m = new THREE.MeshStandardMaterial({color:0x4DB8D9, metalness:0.3, roughness:0.4});
+    this.bodies.wingL = new THREE.Mesh(g,m);
+    this.bodies.wingR = new THREE.Mesh(g,m);
+    this.bodies.wingL.position.set(0,0,0);
+    this.bodies.wingR.position.set(0,0,0);
+    this.scene.add(this.bodies.wingL, this.bodies.wingR);
+  },
+
+  buildHydrofoil() {
+    const g = new THREE.BoxGeometry(1, 0.05, 0.18);
+    const m = new THREE.MeshStandardMaterial({color:0x0D9488, metalness:0.4, roughness:0.35});
+    this.bodies.foilL = new THREE.Mesh(g,m);
+    this.bodies.foilR = new THREE.Mesh(g,m);
+    this.bodies.foilL.visible=this.bodies.foilR.visible=false;
+    this.scene.add(this.bodies.foilL, this.bodies.foilR);
+  },
+
+  buildStruts() {
+    const g = new THREE.BoxGeometry(0.06, 0.8, 0.06);
+    const m = new THREE.MeshStandardMaterial({color:0x6B7280, metalness:0.5, roughness:0.5});
+    this.bodies.strutL = new THREE.Mesh(g,m);
+    this.bodies.strutR = new THREE.Mesh(g,m);
+    this.bodies.strutL.visible=this.bodies.strutR.visible=false;
+    this.scene.add(this.bodies.strutL, this.bodies.strutR);
+  },
+
+  update(lam, geo) {
+    // Wing — shrink & fold up
+    const wScale = Math.max(0.1, 1 + Model.getParams().dSa_dL * lam);
+    this.bodies.wingL.scale.x = wScale;
+    this.bodies.wingR.scale.x = wScale;
+    this.bodies.wingL.position.x = -geo.ba/2 * wScale;
+    this.bodies.wingR.position.x = +geo.ba/2 * wScale;
+    const dihRad = THREE.MathUtils.degToRad(geo.dihedral);
+    this.bodies.wingL.rotation.z = dihRad;
+    this.bodies.wingR.rotation.z = -dihRad;
+    const wingHide = lam > 0.85;
+    this.bodies.wingL.visible = !wingHide;
+    this.bodies.wingR.visible = !wingHide;
+
+    // Hydrofoil — deploy & grow
+    const foilShow = lam > 0.05;
+    this.bodies.foilL.visible = foilShow;
+    this.bodies.foilR.visible = foilShow;
+    this.bodies.strutL.visible = foilShow;
+    this.bodies.strutR.visible = foilShow;
+    const fScale = lam;
+    this.bodies.foilL.scale.x = fScale;
+    this.bodies.foilR.scale.x = fScale;
+    const foilY = -0.2 - lam * 0.4;
+    this.bodies.foilL.position.y = foilY;
+    this.bodies.foilR.position.y = foilY;
+    this.bodies.foilL.position.x = -geo.bh/2 * fScale;
+    this.bodies.foilR.position.x = +geo.bh/2 * fScale;
+    this.bodies.foilL.rotation.x = geo.tau;
+    this.bodies.foilR.rotation.x = geo.tau;
+    this.bodies.strutL.position.y = foilY/2;
+    this.bodies.strutR.position.y = foilY/2;
+    this.bodies.strutL.scale.y = -foilY;
+    this.bodies.strutR.scale.y = -foilY;
+  },
+
+  animate() {
+    requestAnimationFrame(()=>this.animate());
+    this.camera.position.x = this.dist * Math.sin(this.rotY) * Math.cos(this.rotX);
+    this.camera.position.y = this.dist * Math.sin(this.rotX);
+    this.camera.position.z = this.dist * Math.cos(this.rotY) * Math.cos(this.rotX);
+    this.camera.lookAt(0,0,0);
+    this.renderer.render(this.scene, this.camera);
+  }
+};
+
+// ======================================================
+// CHARTS & UI CONTROL
+// ======================================================
+const Charts = {
+  forceChart:null, energyChart:null, optChart:null,
+
+  init() {
+    const opts = { responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#9CA3AF',font:{size:11}}}},
+      scales:{x:{grid:{color:'#334155'},ticks:{color:'#9CA3AF'}},
+              y:{grid:{color:'#334155'},ticks:{color:'#9CA3AF'}}}
+    };
+
+    this.forceChart = new Chart(document.getElementById('plotForces'), {
+      type:'line', options:opts,
+      data:{labels:[], datasets:[
+        {label:'Lift Aero', data:[], borderColor:'#60A5FA', backgroundColor:'rgba(96,165,250,0.2)', fill:true, tension:0.2},
+        {label:'Lift Hydro', data:[], borderColor:'#2DD4BF', backgroundColor:'rgba(45,212,191,0.2)', fill:true, tension:0.2},
+        {label:'Drag Aero', data:[], borderColor:'#F87171', borderDash:[5,4], fill:false, tension:0.2},
+        {label:'Drag Hydro', data:[], borderColor:'#FB923C', borderDash:[5,4], fill:false, tension:0.2},
+        {label:'Drag Interface', data:[], borderColor:'#A78BFA', borderDash:[2,3], fill:false, tension:0.2}
+      ]}
+    });
+
+    this.energyChart = new Chart(document.getElementById('plotEnergy'), {
+      type:'line', options:opts,
+      data:{labels:[], datasets:[
+        {label:'Power (kW)', data:[], borderColor:'#FBBF24', backgroundColor:'rgba(251,191,36,0.2)', fill:true, yAxisID:'y'},
+        {label:'Energy (kJ)', data:[], borderColor:'#A855F7', backgroundColor:'rgba(168,85,247,0.1)', fill:false, yAxisID:'y1'},
+        {label:'95% Uncert ±', data:[], borderColor:'transparent', backgroundColor:'rgba(168,85,247,0.15)', fill:'+1', yAxisID:'y1'}
+      ], options:{scales:{y:{type:'linear',position:'left'}, y1:{type:'linear',position:'right',grid:{drawOnChartArea:false}}}}}
+    });
+
+    this.optChart = new Chart(document.getElementById('plotOpt'), {
+      type:'line', options:opts,
+      data:{labels:[], datasets:[
+        {label:'Stability Margin', data:[], borderColor:'#34D399', fill:false, tension:0.2},
+        {label:'SM Min Limit', data:[], borderColor:'#EF4444', borderDash:[6,4], fill:false},
+        {label:'Cost Function J', data:[], borderColor:'#6366F1', fill:false, tension:0.2}
+      ]}
+    });
+  },
+
+  update(results, optPoint=null) {
+    const labs = results.map(r=>r.lam.toFixed(2));
+    this.forceChart.data.labels = labs;
+    this.forceChart.data.datasets[0].data = results.map(r=>r.La.toFixed(1));
+    this.forceChart.data.datasets[1].data = results.map(r=>r.Lh.toFixed(1));
+    this.forceChart.data.datasets[2].data = results.map(r=>r.Da.toFixed(1));
+    this.forceChart.data.datasets[3].data = results.map(r=>r.Dh.toFixed(1));
+    this.forceChart.data.datasets[4].data = results.map(r=>r.Dint.toFixed(1));
+    this.forceChart.update('none');
+
+    this.energyChart.data.labels = labs;
+    const Pkw = results.map(r=>(r.P/1000).toFixed(2));
+    const Ekj = results.map(r=>(r.E/1000).toFixed(2));
+    const Eup = results.map((r,i)=>(r.E/1000 + 1.96*r.sE/1000).toFixed(2));
+    this.energyChart.data.datasets[0].data = Pkw;
+    this.energyChart.data.datasets[1].data = Ekj;
+    this.energyChart.data.datasets[2].data = Eup;
+    this.energyChart.update('none');
+
+    this.optChart.data.labels = labs;
+    this.optChart.data.datasets[0].data = results.map(r=>r.SM.toFixed(3));
+    this.optChart.data.datasets[1].data = results.map(r=>Model.getParams().SMmin);
+    this.optChart.data.datasets[2].data = results.map(r=>
+      (1*(r.E/1000) + 2*(Model.getParams().SMmin/Math.max(0.01,r.SM))).toFixed(2)
+    );
+    if(optPoint) {
+      this.optChart.data.datasets.push({
+        label:'Optimum λ*', data:Array(labs.length).fill(null),
+        pointBackgroundColor:'#FFD700', pointRadius:6, showLine:false
+      });
+      const idx = Math.round(optPoint.lam*(labs.length-1));
+      this.optChart.data.datasets[3].data[idx] = optPoint.SM.toFixed(3);
+    }
+    this.optChart.update('none');
+  }
+};
+
+// ======================================================
+// MAIN UI BINDING
+// ======================================================
+let currentResult=null, sweepData=[], optimalPoint=null;
+
+function updateAll() {
+  const lam = +document.getElementById('lam_slider').value;
+  const p = Model.getParams();
+  currentResult = Model.compute(lam, p);
+  sweepData = Model.sweep(p);
+
+  // Display λ
+  document.getElementById('lam_display').textContent = `λ = ${lam.toFixed(2)}`;
+  let reg='Atmospheric';
+  if(lam>0.15 && lam<0.85) reg='Transition';
+  if(lam>=0.85) reg='Submerged';
+  document.getElementById('regime_display').textContent = reg;
+
+  // Outputs
+  const r = currentResult;
+  document.getElementById('o_qA').textContent = r.qA.toFixed(1) + ' Pa';
+  document.getElementById('o_qH').textContent = r.qH.toFixed(0) + ' Pa';
+  document.getElementById('o_L').textContent = r.Ltot.toFixed(1) + ' N';
+  document.getElementById('o_D').textContent = r.Dtot.toFixed(1) + ' N';
+  document.getElementById('o_LD').textContent = r.LD.toFixed(2);
+  document.getElementById('o_P').textContent = (r.P/1000).toFixed(2) + ' kW';
+  document.getElementById('o_E').textContent = (r.E/1000).toFixed(2) + ' ± ' + (1.96*r.sE/1000).toFixed(2) + ' kJ';
+  document.getElementById('o_SM').textContent = (r.SM*100).toFixed(1) + '%';
+  document.getElementById('o_SM').className = `stat-value ${r.stable?'pass':'fail'}`;
+
+  // 3D update
+  Viewer.update(lam, r.g);
+
+  // Charts
+  Charts.update(sweepData, optimalPoint);
+}
+
+function exportCSV() {
+  const hdr = 'λ,qA_Pa,qH_Pa,La_N,Lh_N,Da_N,Dh_N,Dint_N,Dtr_N,Dtot_N,Ltot_N,LD,P_W,E_J,sE_J,SM\n';
+  let csv=hdr;
+  sweepData.forEach(r=>{
+    csv += `${r.lam},${r.qA},${r.qH},${r.La},${r.Lh},${r.Da},${r.Dh},${r.Dint},${r.Dtr},${r.Dtot},${r.Ltot},${r.LD},${r.P},${r.E},${r.sE},${r.SM}\n`;
+  });
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='X01_Results.csv';
+  a.click();
+}
+
+// Init
+window.addEventListener('DOMContentLoaded',()=>{
+  Viewer.init();
+  Charts.init();
+  document.getElementById('lam_slider').addEventListener('input',updateAll);
+  document.getElementById('applyBtn').addEventListener('click',()=>{optimalPoint=null;updateAll();});
+  document.getElementById('optimBtn').addEventListener('click',()=>{
+    optimalPoint = Model.findOptimum(Model.getParams());
+    if(optimalPoint) {
+      document.getElementById('lam_slider').value = optimalPoint.lam;
+      alert(`Optimum found at λ = ${optimalPoint.lam.toFixed(2)}\nEnergy = ${(optimalPoint.E/1000).toFixed(2)} kJ\nStability Margin = ${(optimalPoint.SM*100).toFixed(1)}%\nDrag = ${optimalPoint.Dtot.toFixed(1)} N`);
+      updateAll();
+    } else alert('No stable configuration found — adjust parameters!');
+  });
+  document.getElementById('exportBtn').addEventListener('click',exportCSV);
+  updateAll();
+});
+</script>
+</body>
+</html>
